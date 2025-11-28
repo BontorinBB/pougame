@@ -20,6 +20,7 @@
             align-items: center;
             min-height: 100vh;
             padding: 20px;
+            overflow-x: hidden;
         }
         
         header {
@@ -130,7 +131,27 @@
             width: 30px;
             height: 30px;
             margin: 0 5px;
+            font-size: 24px;
+            text-align: center;
+        }
+        
+        .mobile-controls {
+            display: none;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .mobile-btn {
+            width: 80px;
+            height: 80px;
             border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 30px;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
         }
         
         @media (max-width: 600px) {
@@ -146,6 +167,10 @@
             .controls {
                 flex-direction: column;
                 gap: 10px;
+            }
+            
+            .mobile-controls {
+                display: flex;
             }
         }
     </style>
@@ -164,6 +189,11 @@
         
         <canvas id="gameCanvas" width="800" height="500"></canvas>
         
+        <div class="mobile-controls">
+            <div class="mobile-btn" id="leftBtn">←</div>
+            <div class="mobile-btn" id="rightBtn">→</div>
+        </div>
+        
         <div class="controls">
             <button id="startBtn">Iniciar Jogo</button>
             <button id="pauseBtn">Pausar</button>
@@ -175,10 +205,12 @@
             <p>Use as teclas <strong>A</strong> e <strong>D</strong> ou as setas <strong>←</strong> e <strong>→</strong> para mover o Pou para os lados.</p>
             <p>Pegue as comidinhas que caem para ganhar pontos:</p>
             <p>
-                <span class="food-item" style="background-color: #ff9a00;"></span> Laranja: +10 pontos
-                <span class="food-item" style="background-color: #ff5252;"></span> Maçã: +20 pontos
-                <span class="food-item" style="background-color: #4caf50;"></span> Uva: +30 pontos
+                <span class="food-item">🍎</span> Maçã: +10 pontos
+                <span class="food-item">🍌</span> Banana: +20 pontos
+                <span class="food-item">🍇</span> Uva: +30 pontos
+                <span class="food-item">🍓</span> Morango: +40 pontos
             </p>
+            <p>Cuidado com as bombas: <span class="food-item">💣</span> - Perde uma vida!</p>
             <p>Evite deixar as comidinhas caírem no chão para não perder vidas!</p>
             <p>O jogo termina quando o tempo acaba ou você perde todas as vidas.</p>
         </div>
@@ -203,6 +235,8 @@
         const gameOverElement = document.getElementById('gameOver');
         const finalScoreElement = document.getElementById('finalScore');
         const restartBtn = document.getElementById('restartBtn');
+        const leftBtn = document.getElementById('leftBtn');
+        const rightBtn = document.getElementById('rightBtn');
 
         // Variáveis do jogo
         let score = 0;
@@ -212,6 +246,9 @@
         let gamePaused = false;
         let animationId;
         let timerInterval;
+        let keys = {};
+        let currentFood = null;
+        let foodSpawnTimer = 0;
 
         // Personagem (Pou)
         const pou = {
@@ -259,39 +296,33 @@
             }
         };
 
-        // Array de comidinhas
-        let foods = [];
-
-        // Tipos de comidas com pontuação e cores
-        const foodTypes = [
-            { color: '#ff9a00', points: 10, speed: 3 },  // Laranja
-            { color: '#ff5252', points: 20, speed: 4 },  // Maçã
-            { color: '#4caf50', points: 30, speed: 5 }   // Uva
+        // Tipos de comidas e bombas com pontuação e emojis
+        const itemTypes = [
+            { emoji: '🍎', points: 10, speed: 3, type: 'food' },    // Maçã
+            { emoji: '🍌', points: 20, speed: 4, type: 'food' },    // Banana
+            { emoji: '🍇', points: 30, speed: 5, type: 'food' },    // Uva
+            { emoji: '🍓', points: 40, speed: 6, type: 'food' },    // Morango
+            { emoji: '💣', points: -1, speed: 4, type: 'bomb' }     // Bomba
         ];
 
-        // Classe para as comidinhas
-        class Food {
+        // Classe para os itens (comidas e bombas)
+        class Item {
             constructor() {
-                this.type = Math.floor(Math.random() * foodTypes.length);
-                this.x = Math.random() * (canvas.width - 30);
+                const typeIndex = Math.random() < 0.2 ? 4 : Math.floor(Math.random() * 4); // 20% de chance de ser bomba
+                this.type = itemTypes[typeIndex];
+                this.x = Math.random() * (canvas.width - 40);
                 this.y = 0;
-                this.radius = 15;
-                this.speed = foodTypes[this.type].speed;
-                this.color = foodTypes[this.type].color;
-                this.points = foodTypes[this.type].points;
+                this.radius = 20;
+                this.speed = this.type.speed;
+                this.emoji = this.type.emoji;
+                this.points = this.type.points;
             }
             
             draw() {
-                ctx.fillStyle = this.color;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fill();
-                
-                // Detalhe para parecer uma fruta
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-                ctx.beginPath();
-                ctx.arc(this.x - 5, this.y - 5, 5, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.font = '30px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.emoji, this.x, this.y);
             }
             
             update() {
@@ -303,27 +334,59 @@
                 const distance = Math.sqrt(dx * dx + dy * dy);
                 
                 if (distance < this.radius + pou.width/2) {
-                    // Colisão detectada - pegar comida
-                    score += this.points;
-                    scoreElement.textContent = score;
-                    return true; // Remove a comida
+                    // Colisão detectada - pegar item
+                    if (this.type.type === 'food') {
+                        score += this.points;
+                        scoreElement.textContent = score;
+                    } else if (this.type.type === 'bomb') {
+                        lives--;
+                        livesElement.textContent = lives;
+                        // Efeito visual da explosão
+                        drawExplosion(this.x, this.y);
+                    }
+                    return true; // Remove o item
                 }
                 
-                // Verifica se a comida caiu no chão
+                // Verifica se o item caiu no chão
                 if (this.y > canvas.height) {
-                    lives--;
-                    livesElement.textContent = lives;
-                    return true; // Remove a comida
+                    if (this.type.type === 'food') {
+                        lives--;
+                        livesElement.textContent = lives;
+                    }
+                    return true; // Remove o item
                 }
                 
-                return false; // Mantém a comida
+                return false; // Mantém o item
             }
+        }
+
+        // Função para desenhar explosão quando pegar uma bomba
+        function drawExplosion(x, y) {
+            ctx.fillStyle = 'rgba(255, 100, 0, 0.7)';
+            ctx.beginPath();
+            ctx.arc(x, y, 40, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = 'rgba(255, 200, 0, 0.9)';
+            ctx.beginPath();
+            ctx.arc(x, y, 25, 0, Math.PI * 2);
+            ctx.fill();
         }
 
         // Função para desenhar o chão
         function drawGround() {
             ctx.fillStyle = '#2d3436';
             ctx.fillRect(0, canvas.height - 10, canvas.width, 10);
+        }
+
+        // Função para processar movimento do personagem
+        function processMovement() {
+            if (keys['ArrowLeft'] || keys['a'] || keys['A'] || keys['Left']) {
+                pou.moveLeft();
+            }
+            if (keys['ArrowRight'] || keys['d'] || keys['D'] || keys['Right']) {
+                pou.moveRight();
+            }
         }
 
         // Função principal do jogo
@@ -334,19 +397,24 @@
             // Desenha o chão
             drawGround();
             
-            // Desenha e atualiza o Pou
+            // Processa movimento do personagem
+            processMovement();
+            
+            // Desenha o Pou
             pou.draw();
             
-            // Gera novas comidas aleatoriamente
-            if (Math.random() < 0.03) {
-                foods.push(new Food());
+            // Gera novos itens em intervalos regulares (apenas um por vez)
+            foodSpawnTimer++;
+            if (foodSpawnTimer > 60 && currentFood === null) { // Aproximadamente 1 segundo a 60fps
+                currentFood = new Item();
+                foodSpawnTimer = 0;
             }
             
-            // Desenha e atualiza as comidas
-            for (let i = foods.length - 1; i >= 0; i--) {
-                foods[i].draw();
-                if (foods[i].update()) {
-                    foods.splice(i, 1);
+            // Desenha e atualiza o item atual
+            if (currentFood) {
+                currentFood.draw();
+                if (currentFood.update()) {
+                    currentFood = null;
                 }
             }
             
@@ -370,7 +438,7 @@
                 
                 // Inicia o temporizador
                 timerInterval = setInterval(() => {
-                    if (!gamePaused) {
+                    if (!gamePaused && gameRunning) {
                         timer--;
                         timerElement.textContent = timer;
                     }
@@ -405,9 +473,8 @@
             timer = 60;
             gameRunning = false;
             gamePaused = false;
-            
-            // Limpa o array de comidas
-            foods = [];
+            currentFood = null;
+            foodSpawnTimer = 0;
             
             // Reseta a posição do Pou
             pou.x = canvas.width / 2 - 25;
@@ -435,13 +502,32 @@
 
         // Controles de teclado
         document.addEventListener('keydown', (e) => {
-            if (!gameRunning || gamePaused) return;
-            
-            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
-                pou.moveLeft();
-            } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
-                pou.moveRight();
-            }
+            keys[e.key] = true;
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        // Controles de toque para dispositivos móveis
+        leftBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            keys['Left'] = true;
+        });
+
+        leftBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            keys['Left'] = false;
+        });
+
+        rightBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            keys['Right'] = true;
+        });
+
+        rightBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            keys['Right'] = false;
         });
 
         // Event listeners para os botões
