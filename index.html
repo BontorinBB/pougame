@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jogo do Pou - Pegue as Comidinhas</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Comic Sans MS', cursive, sans-serif;
+            background: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            margin-bottom: 10px;
+        }
+        
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 800px;
+            width: 100%;
+        }
+        
+        .game-info {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            margin-bottom: 15px;
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 1.2rem;
+        }
+        
+        #gameCanvas {
+            background-color: #1a1a2e;
+            border-radius: 10px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+            margin-bottom: 20px;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        button {
+            background-color: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        button:hover {
+            background-color: #ff5252;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        .instructions {
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            width: 100%;
+        }
+        
+        .instructions h2 {
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .instructions p {
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+        
+        .game-over {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            z-index: 10;
+        }
+        
+        .game-over h2 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            color: #ff6b6b;
+        }
+        
+        .game-over p {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+        }
+        
+        .food-item {
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            margin: 0 5px;
+            border-radius: 50%;
+        }
+        
+        @media (max-width: 600px) {
+            h1 {
+                font-size: 1.8rem;
+            }
+            
+            #gameCanvas {
+                width: 100%;
+                height: auto;
+            }
+            
+            .controls {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Jogo do Pou - Pegue as Comidinhas</h1>
+        </header>
+        
+        <div class="game-info">
+            <div>Pontuação: <span id="score">0</span></div>
+            <div>Vidas: <span id="lives">3</span></div>
+            <div>Tempo: <span id="timer">60</span>s</div>
+        </div>
+        
+        <canvas id="gameCanvas" width="800" height="500"></canvas>
+        
+        <div class="controls">
+            <button id="startBtn">Iniciar Jogo</button>
+            <button id="pauseBtn">Pausar</button>
+            <button id="resetBtn">Reiniciar</button>
+        </div>
+        
+        <div class="instructions">
+            <h2>Como Jogar</h2>
+            <p>Use as teclas <strong>A</strong> e <strong>D</strong> ou as setas <strong>←</strong> e <strong>→</strong> para mover o Pou para os lados.</p>
+            <p>Pegue as comidinhas que caem para ganhar pontos:</p>
+            <p>
+                <span class="food-item" style="background-color: #ff9a00;"></span> Laranja: +10 pontos
+                <span class="food-item" style="background-color: #ff5252;"></span> Maçã: +20 pontos
+                <span class="food-item" style="background-color: #4caf50;"></span> Uva: +30 pontos
+            </p>
+            <p>Evite deixar as comidinhas caírem no chão para não perder vidas!</p>
+            <p>O jogo termina quando o tempo acaba ou você perde todas as vidas.</p>
+        </div>
+        
+        <div id="gameOver" class="game-over">
+            <h2>Fim de Jogo!</h2>
+            <p>Sua pontuação final: <span id="finalScore">0</span></p>
+            <button id="restartBtn">Jogar Novamente</button>
+        </div>
+    </div>
+
+    <script>
+        // Elementos do DOM
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const livesElement = document.getElementById('lives');
+        const timerElement = document.getElementById('timer');
+        const startBtn = document.getElementById('startBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const gameOverElement = document.getElementById('gameOver');
+        const finalScoreElement = document.getElementById('finalScore');
+        const restartBtn = document.getElementById('restartBtn');
+
+        // Variáveis do jogo
+        let score = 0;
+        let lives = 3;
+        let timer = 60;
+        let gameRunning = false;
+        let gamePaused = false;
+        let animationId;
+        let timerInterval;
+
+        // Personagem (Pou)
+        const pou = {
+            x: canvas.width / 2 - 25,
+            y: canvas.height - 60,
+            width: 50,
+            height: 50,
+            speed: 8,
+            color: '#8e44ad',
+            draw: function() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x + this.width/2, this.y + this.height/2, this.width/2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Olhos
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.arc(this.x + this.width/2 - 10, this.y + this.height/2 - 5, 8, 0, Math.PI * 2);
+                ctx.arc(this.x + this.width/2 + 10, this.y + this.height/2 - 5, 8, 0, Math.PI * 2);
+                ctx.fill();
+                
+                ctx.fillStyle = 'black';
+                ctx.beginPath();
+                ctx.arc(this.x + this.width/2 - 10, this.y + this.height/2 - 5, 4, 0, Math.PI * 2);
+                ctx.arc(this.x + this.width/2 + 10, this.y + this.height/2 - 5, 4, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Boca
+                ctx.beginPath();
+                ctx.arc(this.x + this.width/2, this.y + this.height/2 + 10, 10, 0, Math.PI, false);
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            },
+            moveLeft: function() {
+                if (this.x > 0) {
+                    this.x -= this.speed;
+                }
+            },
+            moveRight: function() {
+                if (this.x < canvas.width - this.width) {
+                    this.x += this.speed;
+                }
+            }
+        };
+
+        // Array de comidinhas
+        let foods = [];
+
+        // Tipos de comidas com pontuação e cores
+        const foodTypes = [
+            { color: '#ff9a00', points: 10, speed: 3 },  // Laranja
+            { color: '#ff5252', points: 20, speed: 4 },  // Maçã
+            { color: '#4caf50', points: 30, speed: 5 }   // Uva
+        ];
+
+        // Classe para as comidinhas
+        class Food {
+            constructor() {
+                this.type = Math.floor(Math.random() * foodTypes.length);
+                this.x = Math.random() * (canvas.width - 30);
+                this.y = 0;
+                this.radius = 15;
+                this.speed = foodTypes[this.type].speed;
+                this.color = foodTypes[this.type].color;
+                this.points = foodTypes[this.type].points;
+            }
+            
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Detalhe para parecer uma fruta
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.beginPath();
+                ctx.arc(this.x - 5, this.y - 5, 5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            update() {
+                this.y += this.speed;
+                
+                // Verifica colisão com o Pou
+                const dx = this.x - (pou.x + pou.width/2);
+                const dy = this.y - (pou.y + pou.height/2);
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance < this.radius + pou.width/2) {
+                    // Colisão detectada - pegar comida
+                    score += this.points;
+                    scoreElement.textContent = score;
+                    return true; // Remove a comida
+                }
+                
+                // Verifica se a comida caiu no chão
+                if (this.y > canvas.height) {
+                    lives--;
+                    livesElement.textContent = lives;
+                    return true; // Remove a comida
+                }
+                
+                return false; // Mantém a comida
+            }
+        }
+
+        // Função para desenhar o chão
+        function drawGround() {
+            ctx.fillStyle = '#2d3436';
+            ctx.fillRect(0, canvas.height - 10, canvas.width, 10);
+        }
+
+        // Função principal do jogo
+        function gameLoop() {
+            // Limpa o canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Desenha o chão
+            drawGround();
+            
+            // Desenha e atualiza o Pou
+            pou.draw();
+            
+            // Gera novas comidas aleatoriamente
+            if (Math.random() < 0.03) {
+                foods.push(new Food());
+            }
+            
+            // Desenha e atualiza as comidas
+            for (let i = foods.length - 1; i >= 0; i--) {
+                foods[i].draw();
+                if (foods[i].update()) {
+                    foods.splice(i, 1);
+                }
+            }
+            
+            // Verifica condições de fim de jogo
+            if (lives <= 0 || timer <= 0) {
+                endGame();
+                return;
+            }
+            
+            // Continua o loop se o jogo estiver rodando
+            if (gameRunning && !gamePaused) {
+                animationId = requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // Função para iniciar o jogo
+        function startGame() {
+            if (!gameRunning) {
+                gameRunning = true;
+                gamePaused = false;
+                
+                // Inicia o temporizador
+                timerInterval = setInterval(() => {
+                    if (!gamePaused) {
+                        timer--;
+                        timerElement.textContent = timer;
+                    }
+                }, 1000);
+                
+                // Inicia o loop do jogo
+                gameLoop();
+            }
+        }
+
+        // Função para pausar o jogo
+        function pauseGame() {
+            if (gameRunning) {
+                gamePaused = !gamePaused;
+                pauseBtn.textContent = gamePaused ? 'Continuar' : 'Pausar';
+                
+                if (!gamePaused) {
+                    gameLoop();
+                }
+            }
+        }
+
+        // Função para reiniciar o jogo
+        function resetGame() {
+            // Cancela a animação
+            cancelAnimationFrame(animationId);
+            clearInterval(timerInterval);
+            
+            // Reseta variáveis
+            score = 0;
+            lives = 3;
+            timer = 60;
+            gameRunning = false;
+            gamePaused = false;
+            
+            // Limpa o array de comidas
+            foods = [];
+            
+            // Reseta a posição do Pou
+            pou.x = canvas.width / 2 - 25;
+            
+            // Atualiza a interface
+            scoreElement.textContent = score;
+            livesElement.textContent = lives;
+            timerElement.textContent = timer;
+            pauseBtn.textContent = 'Pausar';
+            
+            // Esconde a tela de fim de jogo
+            gameOverElement.style.display = 'none';
+        }
+
+        // Função para terminar o jogo
+        function endGame() {
+            gameRunning = false;
+            clearInterval(timerInterval);
+            cancelAnimationFrame(animationId);
+            
+            // Mostra a tela de fim de jogo
+            finalScoreElement.textContent = score;
+            gameOverElement.style.display = 'block';
+        }
+
+        // Controles de teclado
+        document.addEventListener('keydown', (e) => {
+            if (!gameRunning || gamePaused) return;
+            
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+                pou.moveLeft();
+            } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+                pou.moveRight();
+            }
+        });
+
+        // Event listeners para os botões
+        startBtn.addEventListener('click', startGame);
+        pauseBtn.addEventListener('click', pauseGame);
+        resetBtn.addEventListener('click', resetGame);
+        restartBtn.addEventListener('click', resetGame);
+
+        // Inicialização do jogo
+        resetGame();
+    </script>
+</body>
+</html>
